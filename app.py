@@ -738,12 +738,13 @@ elif page == "📜  TLS Certificate Analyzer":
                "and the system CA trust store.  Certificate validation is never "
                "disabled.")
 
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        tls_host = st.text_input("Hostname", "example.com", key="tls_host").strip()
-    with col2:
-        tls_port = st.number_input("Port", min_value=1, max_value=65535,
-                                   value=443, key="tls_port")
+    # ── Quick-test callbacks ───────────────────────────────────────────────────
+    # Callbacks write to session state BEFORE the widgets below are instantiated.
+    # Directly assigning st.session_state["tls_host"] after st.text_input(key="tls_host")
+    # has already rendered raises StreamlitAPIException, so we use on_click instead.
+    def _set_tls_endpoint(host: str, port: int):
+        st.session_state["tls_host"] = host
+        st.session_state["tls_port"] = port
 
     st.markdown("**Quick test endpoints:**")
     qcols = st.columns(4)
@@ -751,12 +752,30 @@ elif page == "📜  TLS Certificate Analyzer":
     for i, ep_name in enumerate(quick_names):
         col_i = qcols[i % 4]
         h, p = TEST_ENDPOINTS[ep_name]
-        if col_i.button(ep_name.replace("_", " ").title(), key=f"quick_{ep_name}"):
-            tls_host = h
-            tls_port = p
-            st.session_state["tls_host"] = h
-            st.session_state["tls_port"] = p
-            st.rerun()
+        col_i.button(
+            ep_name.replace("_", " ").title(),
+            key=f"quick_{ep_name}",
+            on_click=_set_tls_endpoint,
+            args=(h, p),
+        )
+
+    # ── Host / port inputs — rendered AFTER callbacks so default values reflect
+    # any session-state update that the on_click callback just performed.
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        tls_host = st.text_input(
+            "Hostname",
+            value=st.session_state.get("tls_host", "example.com"),
+            key="tls_host",
+        ).strip()
+    with col2:
+        tls_port = st.number_input(
+            "Port",
+            min_value=1,
+            max_value=65535,
+            value=st.session_state.get("tls_port", 443),
+            key="tls_port",
+        )
 
     if st.button("🔍 Inspect TLS", key="btn_tls"):
         with st.spinner(f"Connecting to {tls_host}:{tls_port}..."):
